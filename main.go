@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -45,4 +48,21 @@ func connectMongoDB() {
 
 func main() {
 	connectMongoDB()
+	r := mux.NewRouter()
+
+	cors := handlers.CORS(
+		handlers.AllowedOrigins([]string{"*"}), // Allow requests from all origins
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "X-API-Key"}),
+	)
+
+	// Create a new handler with CORS middleware
+	handler := cors(r)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000" // Default port to 8000 if PORT environment variable is not set
+	}
+	fmt.Println("Server is running on port:", port)
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
