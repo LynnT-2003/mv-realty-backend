@@ -5,12 +5,16 @@ go 1.22.3
 require go.mongodb.org/mongo-driver v1.15.0
 
 require (
+	github.com/creasty/defaults v1.5.1 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
+	github.com/google/uuid v1.2.0 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
+	github.com/gorilla/schema v1.2.0 // indirect
 )
 
 require (
+	github.com/cloudinary/cloudinary-go/v2 v2.7.0
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.13.6 // indirect

@@ -9,6 +9,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -26,15 +28,16 @@ type Property struct {
 	Developer   string             `bson:"Developer" json:"Developer"`
 	Description string             `bson:"Description" json:"Description"`
 	Coordinates [2]float64         `bson:"Coordinates" json:"Coordinates"`
-	PriceRange  string             `bson:"Price-range" json:"Price-range"`
+	MinPrice    int                `bson:"MinPrice" json:"MinPrice"`
+	MaxPrice    int                `bson:"MaxPrice" json:"MaxPrice"`
 	Facilities  []string           `bson:"Facilities" json:"Facilities"`
+	Images      []string           `bson:"Images" json:"Images"`
 	Built       int                `bson:"Built" json:"Built"`
 	CreatedAt   time.Time          `bson:"Created_at" json:"Created_at"`
 }
 
 // Initialize MongoDB client
 func connectMongoDB() {
-	// Load .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -61,6 +64,7 @@ func connectMongoDB() {
 	fmt.Println("Connected to MongoDB!")
 }
 
+// Handler to get all properties
 func getProperties(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -91,6 +95,72 @@ func getProperties(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(properties)
 }
 
+// Handler to upload an image
+func uploadImage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(r)
+	id, _ := primitive.ObjectIDFromHex(params["id"])
+
+	// Parse the form data
+	err := r.ParseMultipartForm(10 << 20) // Max file size: 10 MB
+	if err != nil {
+		http.Error(w, "Unable to parse form data", http.StatusBadRequest)
+		return
+	}
+
+	// Get the file from form data
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "Unable to get the file from form data", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Initialize Cloudinary
+	cld, err := cloudinary.NewFromParams(
+		os.Getenv("CLOUDINARY_CLOUD_NAME"),
+		os.Getenv("CLOUDINARY_API_KEY"),
+		os.Getenv("CLOUDINARY_API_SECRET"),
+	)
+	if err != nil {
+		http.Error(w, "Failed to initialize Cloudinary", http.StatusInternalServerError)
+		return
+	}
+
+	// Upload the file to Cloudinary
+	uploadResult, err := cld.Upload.Upload(context.Background(), file, uploader.UploadParams{})
+	if err != nil {
+		http.Error(w, "Failed to upload image to Cloudinary: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Log the upload result for debugging
+	fmt.Printf("Upload Result: %+v\n", uploadResult)
+
+	// Check if the SecureURL is empty
+	if uploadResult.SecureURL == "" {
+		http.Error(w, "Empty SecureURL returned from Cloudinary", http.StatusInternalServerError)
+		return
+	}
+
+	// Update the property with the image URL
+	collection := client.Database("MVDB").Collection("properties")
+	update := bson.M{
+		"$push": bson.M{
+			"Images": uploadResult.SecureURL,
+		},
+	}
+	_, err = collection.UpdateByID(context.Background(), id, update)
+	if err != nil {
+		http.Error(w, "Failed to update property with image URL", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(bson.M{"message": "Image uploaded successfully", "url": uploadResult.SecureURL})
+}
+
 func main() {
 	connectMongoDB()
 	r := mux.NewRouter()
@@ -106,6 +176,7 @@ func main() {
 
 	// Routes
 	r.HandleFunc("/properties", getProperties).Methods("GET")
+	r.HandleFunc("/properties/{id}/images", uploadImage).Methods("POST")
 
 	port := os.Getenv("PORT")
 	if port == "" {
