@@ -32,23 +32,23 @@ type Inquiry struct {
 
 type Appointment struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty" json:"appointment_id,omitempty"`
-	UserID          string             `bson:"User_id,omitempty" json:"User_id,omitempty"`
-	PropertyID      string             `bson:"Property_id,omitempty" json:"Property_id,omitempty"`
-	ListingID       string             `bson:"Listing_id,omitempty" json:"Listing_id,omitempty"`
-	AppointmentDate time.Time          `bson:"Appointment_date,omitempty" json:"Appointment_date,omitempty"`
-	Status          string             `bson:"Status,omitempty" json:"Status,omitempty"` // scheduled, completed, cancelled
-	CreatedAt       time.Time          `bson:"Created_at,omitempty" json:"Created_at,omitempty"`
+	UserID          string             `bson:"User_id" json:"User_id"`
+	PropertyID      string             `bson:"Property_id" json:"Property_id"`
+	ListingID       string             `bson:"Listing_id" json:"Listing_id"`
+	AppointmentDate time.Time          `bson:"Appointment_date" json:"Appointment_date"`
+	Status          string             `bson:"Status" json:"Status"` // scheduled, completed, cancelled
+	CreatedAt       time.Time          `bson:"Created_at" json:"Created_at"`
 }
 
 // User represents the structure of a user document
 type User struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"user_id,omitempty"`
-	Name      string             `bson:"name,omitempty" json:"name,omitempty"`
-	Email     string             `bson:"email,omitempty" json:"email,omitempty"`
-	Password  string             `bson:"password,omitempty" json:"password,omitempty"`
-	Phone     string             `bson:"phone,omitempty" json:"phone,omitempty"`
-	Role      string             `bson:"role,omitempty" json:"role,omitempty"` // client or admin
-	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	Name      string             `bson:"name" json:"name"`
+	Email     string             `bson:"email" json:"email"`
+	Password  string             `bson:"password" json:"password"`
+	Phone     string             `bson:"phone" json:"phone"`
+	Role      string             `bson:"role" json:"role"` // client or admin
+	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 }
 
 type Property struct {
@@ -63,6 +63,25 @@ type Property struct {
 	Images      []string           `bson:"Images" json:"Images"`
 	Built       int                `bson:"Built" json:"Built"`
 	CreatedAt   time.Time          `bson:"Created_at" json:"Created_at"`
+}
+
+type Listing struct {
+	ID              primitive.ObjectID `bson:"_id,omitempty" json:"listing_id,omitempty"`
+	PropertyID      string             `bson:"property_id" json:"property_id"`
+	Description     string             `bson:"description" json:"description"`
+	Price           float64            `bson:"price" json:"price"`
+	MinimumContract string             `bson:"minimum_contract" json:"minimum_contract"`
+	Floor           int                `bson:"floor" json:"floor"`
+	Size            float64            `bson:"size" json:"size"` // size in square meters
+	Bedroom         int                `bson:"bedroom" json:"bedroom"`
+	Bathroom        int                `bson:"bathroom" json:"bathroom"`
+	Furniture       string             `bson:"furniture" json:"furniture"`               // fully-fitted or fully furnished
+	Status          string             `bson:"status" json:"status"`                     // ready to move in or finishing in 2026
+	ListingType     string             `bson:"listing_type" json:"listing_type"`         // sale or rent
+	FacingDirection string             `bson:"facing_direction" json:"facing_direction"` // N, S, E, W, NE, NW, SE, SW
+	CreatedAt       time.Time          `bson:"created_at" json:"created_at"`
+	Photos          []string           `bson:"photos" json:"photos"`                 // URLs of photos
+	ListingStatus   string             `bson:"listing_status" json:"listing_status"` // active or inactive
 }
 
 // Initialize MongoDB client
@@ -154,6 +173,94 @@ func getInquires(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(inquiries)
 }
 
+func getAppointments(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := client.Database("MVDB").Collection("appointments")
+	cur, err := collection.Find(ctx, bson.M{})
+	if err != nil {
+		http.Error(w, "Failed to retrieve Appointments from MongoDB", http.StatusInternalServerError)
+		return
+	}
+	defer cur.Close(ctx)
+
+	var appointments []Appointment
+	for cur.Next(ctx) {
+		var appointment Appointment
+		if err := cur.Decode(&appointment); err != nil {
+			http.Error(w, "Failed to decode retrieved Appointments", http.StatusInternalServerError)
+			return
+		}
+		appointments = append(appointments, appointment)
+	}
+	if err := cur.Err(); err != nil {
+		http.Error(w, "Error iterating through cursor", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(appointments)
+}
+
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := client.Database("MVDB").Collection("users")
+	cur, err := collection.Find(ctx, bson.M{})
+	if err != nil {
+		http.Error(w, "Failed to retrieve Users from MongoDB", http.StatusInternalServerError)
+		return
+	}
+	defer cur.Close(ctx)
+
+	var users []User
+	for cur.Next(ctx) {
+		var user User
+		if err := cur.Decode(&user); err != nil {
+			http.Error(w, "Failed to decode retrieved Users", http.StatusInternalServerError)
+			return
+		}
+		users = append(users, user)
+	}
+	if err := cur.Err(); err != nil {
+		http.Error(w, "Error iterating through cursor", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(users)
+}
+
+func getListings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := client.Database("MVDB").Collection("listings")
+	cur, err := collection.Find(ctx, bson.M{})
+	if err != nil {
+		http.Error(w, "Failed to retrieve Listings from MongoDB", http.StatusInternalServerError)
+		return
+	}
+	defer cur.Close(ctx)
+
+	var listings []Listing
+	for cur.Next(ctx) {
+		var listing Listing
+		if err := cur.Decode(&listing); err != nil {
+			http.Error(w, "Failed to decode retrieved Listings", http.StatusInternalServerError)
+			return
+		}
+		listings = append(listings, listing)
+	}
+	if err := cur.Err(); err != nil {
+		http.Error(w, "Error iterating through cursor", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(listings)
+}
+
 // Handler to upload an image
 func uploadImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -236,6 +343,9 @@ func main() {
 	// Routes
 	r.HandleFunc("/properties", getProperties).Methods("GET")
 	r.HandleFunc("/inquiries", getInquires).Methods("GET")
+	r.HandleFunc("/appointments", getAppointments).Methods("GET")
+	r.HandleFunc("/users", getUsers).Methods("GET")
+	r.HandleFunc("/listings", getListings).Methods("GET")
 	r.HandleFunc("/properties/{id}/images", uploadImage).Methods("POST")
 
 	port := os.Getenv("PORT")
