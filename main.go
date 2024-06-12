@@ -327,6 +327,81 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(bson.M{"message": "Image uploaded successfully", "url": uploadResult.SecureURL})
 }
 
+func createProperty(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse request body for POST
+	var property Property
+	err := json.NewDecoder(r.Body).Decode(&property)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusInternalServerError)
+		return
+	}
+
+	// Set CreatedAt timestamp
+	property.CreatedAt = time.Now()
+	property.Images = []string{}
+
+	// Insert property into MongoDB
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := client.Database("MVDB").Collection("properties")
+	result, err := collection.InsertOne(ctx, property)
+	if err != nil {
+		http.Error(w, "Failed to create Property", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(bson.M{"property_id": result.InsertedID})
+}
+
+func createListing(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse request body for POST
+	var listing Listing
+	err := json.NewDecoder(r.Body).Decode(&listing)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusInternalServerError)
+		return
+	}
+
+	// Ctx, cancel
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Validation (check if propertyId exists in Properties Collection)
+	propertiesCollection := client.Database("MVDB").Collection("properties")
+	var property Property
+	propertyID, err := primitive.ObjectIDFromHex(listing.PropertyID)
+	if err != nil {
+		http.Error(w, "Invalid PropertyID format", http.StatusBadRequest)
+		return
+	}
+	err = propertiesCollection.FindOne(ctx, bson.M{"_id": propertyID}).Decode(&property)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "PropertyID does not exist", http.StatusBadRequest)
+		} else {
+			http.Error(w, "Failed to check PropertyID", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Set CreatedAt timestamp
+	listing.CreatedAt = time.Now()
+	listing.Photos = []string{}
+
+	// Insert listing into MongoDB
+	listingsCollection := client.Database("MVDB").Collection("listings")
+	result, err := listingsCollection.InsertOne(ctx, listing)
+	if err != nil {
+		http.Error(w, "Failed to create Listing", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(bson.M{"listing_id": result.InsertedID})
+}
+
 func main() {
 	connectMongoDB()
 	r := mux.NewRouter()
@@ -346,6 +421,9 @@ func main() {
 	r.HandleFunc("/appointments", getAppointments).Methods("GET")
 	r.HandleFunc("/users", getUsers).Methods("GET")
 	r.HandleFunc("/listings", getListings).Methods("GET")
+
+	r.HandleFunc("/add/property", createProperty).Methods("POST")
+	r.HandleFunc("/add/listing", createListing).Methods("POST")
 	r.HandleFunc("/properties/{id}/images", uploadImage).Methods("POST")
 
 	port := os.Getenv("PORT")
