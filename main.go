@@ -45,9 +45,7 @@ type User struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"user_id,omitempty"`
 	Name      string             `bson:"name" json:"name"`
 	Email     string             `bson:"email" json:"email"`
-	Password  string             `bson:"password" json:"password"`
 	Phone     string             `bson:"phone" json:"phone"`
-	Role      string             `bson:"role" json:"role"` // client or admin
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 }
 
@@ -402,6 +400,64 @@ func createListing(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(bson.M{"listing_id": result.InsertedID})
 }
 
+func createInquiry(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse request body for POST
+	var inquiry Inquiry
+	err := json.NewDecoder(r.Body).Decode(&inquiry)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusInternalServerError)
+		return
+	}
+
+	// Ctx, cancel
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Validation Check
+	// TODO: Complete any validation / verification
+
+	// Set CreatedAt timestamp
+	inquiry.CreatedAt = time.Now()
+
+	// Insert inquiry into MongoDB
+	inquiriesCollection := client.Database("MVDB").Collection("inquiries")
+	result, err := inquiriesCollection.InsertOne(ctx, inquiry)
+	if err != nil {
+		http.Error(w, "Failed to create Inquiry", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(bson.M{"inquiry_id": result.InsertedID})
+}
+
+func createUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse request body for POST
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusInternalServerError)
+		return
+	}
+
+	// Set CreatedAt timestamp
+	user.CreatedAt = time.Now()
+
+	// Insert User into MongoDB
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := client.Database("MVDB").Collection("users")
+	result, err := collection.InsertOne(ctx, user)
+	if err != nil {
+		http.Error(w, "Failed to create User", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(bson.M{"user_id": result.InsertedID})
+}
+
 func main() {
 	connectMongoDB()
 	r := mux.NewRouter()
@@ -424,6 +480,9 @@ func main() {
 
 	r.HandleFunc("/add/property", createProperty).Methods("POST")
 	r.HandleFunc("/add/listing", createListing).Methods("POST")
+	r.HandleFunc("/add/inquiry", createInquiry).Methods("POST")
+	r.HandleFunc("/add/user", createUser).Methods("POST")
+
 	r.HandleFunc("/properties/{id}/images", uploadImage).Methods("POST")
 
 	port := os.Getenv("PORT")
