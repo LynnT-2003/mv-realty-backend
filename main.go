@@ -110,7 +110,6 @@ func connectMongoDB() {
 	fmt.Println("Connected to MongoDB!")
 }
 
-// Handler to get all properties
 func getProperties(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -458,6 +457,32 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(bson.M{"user_id": result.InsertedID})
 }
 
+func checkUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	email := r.URL.Query().Get("email")
+	if email == "" {
+		http.Error(w, "Email query parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := client.Database("MVDB").Collection("users")
+	var user User
+	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			json.NewEncoder(w).Encode(bson.M{"exists": false})
+			return
+		}
+		http.Error(w, "Error checking user existence", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(bson.M{"exists": true})
+}
+
 func main() {
 	connectMongoDB()
 	r := mux.NewRouter()
@@ -476,6 +501,7 @@ func main() {
 	r.HandleFunc("/inquiries", getInquires).Methods("GET")
 	r.HandleFunc("/appointments", getAppointments).Methods("GET")
 	r.HandleFunc("/users", getUsers).Methods("GET")
+	r.HandleFunc("/check/user", checkUser).Methods("GET")
 	r.HandleFunc("/listings", getListings).Methods("GET")
 
 	r.HandleFunc("/add/property", createProperty).Methods("POST")
