@@ -20,7 +20,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var client *mongo.Client
+var (
+	client *mongo.Client
+	apiKey string
+)
 
 type Inquiry struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"inquiry_id,omitempty"`
@@ -484,6 +487,16 @@ func checkUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+    // err := godotenv.Load()
+    // if err != nil {
+    //     log.Fatal("Error loading .env file:", err)
+    // }
+
+    // apiKey = os.Getenv("API_KEY")
+    // if apiKey == "" {
+    //     log.Fatal("API_KEY environment variable not set")
+    // }
+
 	connectMongoDB()
 	r := mux.NewRouter()
 
