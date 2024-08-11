@@ -13,7 +13,6 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -84,10 +83,10 @@ var client *mongo.Client
 
 func connectMongoDB() {
 	// Load environment variables from .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
 	// Get the MongoDB URI from environment variable
 	mongoURI := os.Getenv("MONGODB_URI")
@@ -99,6 +98,7 @@ func connectMongoDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	var err error
 	// Initialize the MongoDB client
 	client, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
