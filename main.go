@@ -545,10 +545,10 @@ func checkUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    err := godotenv.Load()
-    if err != nil {
-        log.Fatal("Error loading .env file:", err)
-    }
+    // err := godotenv.Load()
+    // if err != nil {
+    //     log.Fatal("Error loading .env file:", err)
+    // }
 
     // apiKey = os.Getenv("API_KEY")
     // if apiKey == "" {
