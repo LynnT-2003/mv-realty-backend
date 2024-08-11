@@ -13,15 +13,11 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-)
-
-var (
-	client *mongo.Client
-	apiKey string
 )
 
 type Inquiry struct {
@@ -84,33 +80,40 @@ type Listing struct {
 	ListingStatus   string             `bson:"listing_status" json:"listing_status"` // active or inactive
 }
 
-// Initialize MongoDB client
-func connectMongoDB() {
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
+var client *mongo.Client
 
+func connectMongoDB() {
+	// Load environment variables from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	// Get the MongoDB URI from environment variable
 	mongoURI := os.Getenv("MONGODB_URI")
 	if mongoURI == "" {
 		log.Fatal("MONGODB_URI environment variable not set")
 	}
 
+	// Create a new context with a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	// Initialize the MongoDB client
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error connecting to MongoDB:", err)
 	}
 
+	// Ping the MongoDB server to ensure connection
 	err = client.Ping(ctx, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error pinging MongoDB:", err)
 	}
 
+	// Print success messages
 	fmt.Println("Connected to MongoDB!")
+	log.Println("MongoDB Client Initialized:", client)
 }
 
 func getProperties(w http.ResponseWriter, r *http.Request) {
@@ -202,15 +205,24 @@ func getAppointments(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(appointments)
 }
-
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	log.Println("getUsers called") // Log the start of the function
+	log.Println("MongoDB client status in getUsers:", client)
+
+	if client == nil {
+		log.Println("MongoDB client is not initialized")
+		http.Error(w, "MongoDB client is not initialized", http.StatusInternalServerError)
+		return
+	}
+
 	collection := client.Database("MVDB").Collection("users")
 	cur, err := collection.Find(ctx, bson.M{})
 	if err != nil {
+		log.Println("Failed to retrieve Users from MongoDB:", err)
 		http.Error(w, "Failed to retrieve Users from MongoDB", http.StatusInternalServerError)
 		return
 	}
@@ -220,17 +232,63 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	for cur.Next(ctx) {
 		var user User
 		if err := cur.Decode(&user); err != nil {
+			log.Println("Failed to decode retrieved Users:", err)
 			http.Error(w, "Failed to decode retrieved Users", http.StatusInternalServerError)
 			return
 		}
 		users = append(users, user)
 	}
 	if err := cur.Err(); err != nil {
+		log.Println("Error iterating through cursor:", err)
 		http.Error(w, "Error iterating through cursor", http.StatusInternalServerError)
 		return
 	}
+	log.Println("Successfully retrieved users")
 	json.NewEncoder(w).Encode(users)
 }
+
+
+// func getUsers(w http.ResponseWriter, r *http.Request) {
+// 	w.Header().Set("Content-Type", "application/json")
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+
+// 	log.Println("getUsers called") // Log the start of the function
+
+// 	if client == nil {
+// 		log.Println("MongoDB client is not initialized")
+// 		http.Error(w, "MongoDB client is not initialized", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	collection := client.Database("MVDB").Collection("users")
+// 	cur, err := collection.Find(ctx, bson.M{})
+// 	if err != nil {
+// 		log.Println("Failed to retrieve Users from MongoDB:", err)
+// 		http.Error(w, "Failed to retrieve Users from MongoDB", http.StatusInternalServerError)
+// 		return
+// 	}
+// 	defer cur.Close(ctx)
+
+// 	var users []User
+// 	for cur.Next(ctx) {
+// 		var user User
+// 		if err := cur.Decode(&user); err != nil {
+// 			log.Println("Failed to decode retrieved Users:", err)
+// 			http.Error(w, "Failed to decode retrieved Users", http.StatusInternalServerError)
+// 			return
+// 		}
+// 		users = append(users, user)
+// 	}
+// 	if err := cur.Err(); err != nil {
+// 		log.Println("Error iterating through cursor:", err)
+// 		http.Error(w, "Error iterating through cursor", http.StatusInternalServerError)
+// 		return
+// 	}
+// 	log.Println("Successfully retrieved users")
+// 	json.NewEncoder(w).Encode(users)
+// }
+
 
 func getListings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -487,10 +545,10 @@ func checkUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    // err := godotenv.Load()
-    // if err != nil {
-    //     log.Fatal("Error loading .env file:", err)
-    // }
+    err := godotenv.Load()
+    if err != nil {
+        log.Fatal("Error loading .env file:", err)
+    }
 
     // apiKey = os.Getenv("API_KEY")
     // if apiKey == "" {
