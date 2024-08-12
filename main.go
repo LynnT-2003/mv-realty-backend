@@ -83,6 +83,7 @@ var client *mongo.Client
 
 func connectMongoDB() {
 	// Load environment variables from .env file
+	// uncomment here for localhost testing
 	// err := godotenv.Load()
 	// if err != nil {
 	// 	log.Fatal("Error loading .env file")
@@ -98,6 +99,7 @@ func connectMongoDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// here
 	var err error
 	// Initialize the MongoDB client
 	client, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
@@ -205,6 +207,7 @@ func getAppointments(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(appointments)
 }
+
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -246,6 +249,8 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	log.Println("Successfully retrieved users")
 	json.NewEncoder(w).Encode(users)
 }
+
+
 
 
 // func getUsers(w http.ResponseWriter, r *http.Request) {
@@ -544,12 +549,73 @@ func checkUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(bson.M{"exists": true})
 }
 
+// PUT requests
+func updateUser(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+
+    // Parse request body for the new phone number
+    var updatedData struct {
+        Phone string `json:"phone"`
+    }
+    err := json.NewDecoder(r.Body).Decode(&updatedData)
+    if err != nil {
+        http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+        return
+    }
+
+    // Get the user_id from the query parameters
+    userID := r.URL.Query().Get("user_id")
+    if userID == "" {
+        http.Error(w, "User ID is required", http.StatusBadRequest)
+        return
+    }
+
+    // Convert userID to BSON ObjectID (if it's in ObjectId format)
+    objID, err := primitive.ObjectIDFromHex(userID)
+    if err != nil {
+        http.Error(w, "Invalid User ID format", http.StatusBadRequest)
+        return
+    }
+
+    // Define the update operation
+    update := bson.M{
+        "$set": bson.M{
+            "phone": updatedData.Phone,
+        },
+    }
+
+    // Execute the update operation
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    collection := client.Database("MVDB").Collection("users")
+    result, err := collection.UpdateByID(ctx, objID, update)
+    if err != nil {
+        http.Error(w, "Failed to update User", http.StatusInternalServerError)
+        return
+    }
+
+    // Check if a document was modified
+    if result.MatchedCount == 0 {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+
+    json.NewEncoder(w).Encode(bson.M{"message": "User updated successfully"})
+}
+
+
+
+
+
 func main() {
+	// uncomment here for localhost testing
     // err := godotenv.Load()
     // if err != nil {
     //     log.Fatal("Error loading .env file:", err)
     // }
 
+	// uncomment here for localhost testing (actually this is not implemented yet)
     // apiKey = os.Getenv("API_KEY")
     // if apiKey == "" {
     //     log.Fatal("API_KEY environment variable not set")
@@ -581,6 +647,9 @@ func main() {
 	r.HandleFunc("/add/user", createUser).Methods("POST")
 
 	r.HandleFunc("/properties/{id}/images", uploadImage).Methods("POST")
+
+	r.HandleFunc("/users", updateUser).Methods("PUT")
+
 
 	port := os.Getenv("PORT")
 	if port == "" {
