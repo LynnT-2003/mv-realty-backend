@@ -250,7 +250,35 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
+func getUserByEmail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
+	// Get the name from the URL query parameters
+    email := r.URL.Query().Get("email")
+    if email == "" {
+        http.Error(w, "Email is required", http.StatusBadRequest)
+        return
+    }
+
+	filter := bson.M{"email": email}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) 
+	defer cancel()
+
+    collection := client.Database("MVDB").Collection("users")
+	var user bson.M
+	err := collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "User not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Failed to retrieve User", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	json.NewEncoder(w).Encode(user)
+}
 
 
 // func getUsers(w http.ResponseWriter, r *http.Request) {
@@ -605,9 +633,6 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 
-
-
-
 func main() {
 	// uncomment here for localhost testing
     // err := godotenv.Load()
@@ -640,6 +665,8 @@ func main() {
 	r.HandleFunc("/users", getUsers).Methods("GET")
 	r.HandleFunc("/check/user", checkUser).Methods("GET")
 	r.HandleFunc("/listings", getListings).Methods("GET")
+
+	r.HandleFunc("/users/getUserByEmail", getUserByEmail).Methods("GET")
 
 	r.HandleFunc("/add/property", createProperty).Methods("POST")
 	r.HandleFunc("/add/listing", createListing).Methods("POST")
